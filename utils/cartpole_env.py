@@ -44,7 +44,7 @@ class CartPoleBulletEnv(gym.Env):
 
         self.render_mode = render
         self._time_step = 1.0 / 120.0  # шаг симуляции
-        self._max_episode_steps = 512
+        self._max_episode_steps = 1024
         self._elapsed_steps = 0
 
         # Для вычисления ускорений будем хранить предыдущие значения скоростей
@@ -206,7 +206,7 @@ class CartPoleBulletEnv(gym.Env):
             )
 
         p.stepSimulation()
-        # time.sleep(self._time_step)
+        time.sleep(self._time_step)
         self._elapsed_steps += 1
 
         # Получение текущей позиции тележки
