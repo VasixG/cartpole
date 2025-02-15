@@ -24,7 +24,7 @@ class SimplePIDController:
         theta_dot = obs[3]
         force = -(self.kp * theta + self.kd * theta_dot)
         force = np.clip(force, -self.max_force, self.max_force)
-        return np.array([force])
+        return np.array([force])  # np.array([force])
 
 
 class RlPolicyController:

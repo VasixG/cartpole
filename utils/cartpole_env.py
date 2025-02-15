@@ -44,7 +44,7 @@ class CartPoleBulletEnv(gym.Env):
 
         self.render_mode = render
         self._time_step = 1.0 / 240.0  # шаг симуляции
-        self._max_episode_steps = 1000
+        self._max_episode_steps = 500
         self._elapsed_steps = 0
 
         # Для вычисления ускорений будем хранить предыдущие значения скоростей
@@ -60,7 +60,13 @@ class CartPoleBulletEnv(gym.Env):
         p.resetSimulation()
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
-        p.setPhysicsEngineParameter(numSolverIterations=50)
+
+        # Ускоряем симуляцию
+        p.setPhysicsEngineParameter(
+            fixedTimeStep=self._time_step,
+            numSolverIterations=30,  # Оптимальный баланс
+            enableConeFriction=1,
+        )
 
         # Плоскость
         self._plane_id = p.loadURDF("plane.urdf")
@@ -188,7 +194,7 @@ class CartPoleBulletEnv(gym.Env):
         return obs, info
 
     def step(self, action):
-        """Применяем действие (силу/скорость колёс) и шагаем в PyBullet."""
+        """Применяем действие (скорость колёс) и шагаем в PyBullet."""
         velocity = action[0]
         for j in range(4):
             p.setJointMotorControl2(
@@ -203,25 +209,28 @@ class CartPoleBulletEnv(gym.Env):
         time.sleep(self._time_step)
         self._elapsed_steps += 1
 
-        # Получение текущей позиции каретки
+        # Получение текущей позиции тележки
         cart_position, _ = p.getBasePositionAndOrientation(self._cart_id)
         cart_x, cart_y, cart_z = cart_position
 
-        # Ограничения по положениям x, y, z
-        x_limit = 10.0  # Пример: допустимый диапазон по X (-2.0, 2.0)
-        y_limit = 10.0  # Пример: допустимый диапазон по Y (-0.5, 0.5)
-
-        # Проверка на выход за границы
+        # Ограничения по положениям
+        x_limit = 10.0
+        y_limit = 10.0
         out_of_bounds = abs(cart_x) > x_limit or abs(cart_y) > y_limit
 
-        # Наблюдение
+        # Получение состояния
         obs = self._get_observation()
+        cart_vx = obs[0]  # скорость тележки
         theta = obs[2]  # угол маятника
+        theta_dot = obs[3]  # угловая скорость маятника
 
-        # Награда: стимулируем вертикальность маятника
-        reward = 1.0 - abs(theta) * 0.05
+        # Улучшенное вознаграждение
+        reward = 1.0 - abs(theta) * 0.05  # основной бонус за вертикальность маятника
+        reward -= abs(cart_vx) * 0.02  # штраф за большую скорость тележки
+        reward -= abs(cart_x) * 0.01  # штраф за уход тележки от центра
+        reward -= abs(theta_dot) * 0.02  # штраф за колебания маятника
 
-        # Условия завершения
+        # Условия завершения эпизода
         done = abs(theta) > math.pi / 4 or out_of_bounds
         truncated = self._elapsed_steps >= self._max_episode_steps
 
