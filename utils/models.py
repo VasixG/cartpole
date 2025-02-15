@@ -8,9 +8,9 @@ def make_ppo_model(vec_env: gym.Env, **kwargs):
     model = PPO(
         "MlpPolicy",
         vec_env,
-        n_steps=2048,
-        batch_size=64,
-        learning_rate=1e-4,
+        n_steps=512,
+        # batch_size=64,
+        learning_rate=1e-3,
         verbose=1,
         device="cpu",
     )

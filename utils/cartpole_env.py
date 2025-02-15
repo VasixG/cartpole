@@ -43,8 +43,8 @@ class CartPoleBulletEnv(gym.Env):
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render
-        self._time_step = 1.0 / 240.0  # шаг симуляции
-        self._max_episode_steps = 500
+        self._time_step = 1.0 / 120.0  # шаг симуляции
+        self._max_episode_steps = 512
         self._elapsed_steps = 0
 
         # Для вычисления ускорений будем хранить предыдущие значения скоростей
