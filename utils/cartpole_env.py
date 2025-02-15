@@ -266,4 +266,5 @@ class CartPoleBulletEnv(gym.Env):
         pass
 
     def close(self):
-        p.disconnect()
+        if p.getConnectionInfo()["isConnected"]:
+            p.disconnect()

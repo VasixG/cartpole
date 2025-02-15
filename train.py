@@ -36,12 +36,25 @@ def main():
 
     # model = make_ppo_model(vec_env)
 
+    model_path = "models/ppo_cartpole_bullet2.zip"
+
+    if not os.path.exists("models"):
+        os.makedirs("models")
+
+    if os.path.exists(model_path):
+        print(f"Loading model from {model_path}...")
+        model = PPO.load(model_path, env=vec_env)
+    else:
+        print("No pre-trained model found. Creating a new model...")
+        model = make_ppo_model(vec_env)
+
     total_timesteps = 200_000
     model.learn(total_timesteps=total_timesteps)
 
-    model.save("models/ppo_cartpole_bullet2.zip")
+    model.save(model_path)
 
-    vec_env.close()
+    if vec_env is not None:
+        vec_env.close()
 
 
 if __name__ == "__main__":
