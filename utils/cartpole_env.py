@@ -206,7 +206,7 @@ class CartPoleBulletEnv(gym.Env):
             )
 
         p.stepSimulation()
-        time.sleep(self._time_step)
+        # time.sleep(self._time_step)
         self._elapsed_steps += 1
 
         # Получение текущей позиции тележки
