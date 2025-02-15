@@ -48,7 +48,7 @@ def main():
         print("No pre-trained model found. Creating a new model...")
         model = make_ppo_model(vec_env)
 
-    total_timesteps = 200_000
+    total_timesteps = 1_000_000
     model.learn(total_timesteps=total_timesteps)
 
     model.save(model_path)
