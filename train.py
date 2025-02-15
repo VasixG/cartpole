@@ -19,7 +19,7 @@ def make_env(cart_mass, pendulum_len, pendulum_mass, render=False):
 
 def main():
 
-    n_envs = 5
+    n_envs = 1
 
     vec_env = make_vec_env(
         make_env(cart_mass=1.1, pendulum_len=0.6, pendulum_mass=0.1, render=False), n_envs=n_envs
