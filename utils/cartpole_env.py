@@ -44,7 +44,7 @@ class CartPoleBulletEnv(gym.Env):
 
         self.render_mode = render
         self._time_step = 1.0 / 120.0  # шаг симуляции
-        self._max_episode_steps = 1024
+        self._max_episode_steps = 2048
         self._elapsed_steps = 0
 
         # Для вычисления ускорений будем хранить предыдущие значения скоростей
@@ -214,8 +214,8 @@ class CartPoleBulletEnv(gym.Env):
         cart_x, cart_y, cart_z = cart_position
 
         # Ограничения по положениям
-        x_limit = 10.0
-        y_limit = 10.0
+        x_limit = 3.0
+        y_limit = 3.0
         out_of_bounds = abs(cart_x) > x_limit or abs(cart_y) > y_limit
 
         # Получение состояния
@@ -227,8 +227,8 @@ class CartPoleBulletEnv(gym.Env):
         # Улучшенное вознаграждение
         reward = 1.0 - abs(theta) * 0.05  # основной бонус за вертикальность маятника
         reward -= abs(cart_vx) * 0.02  # штраф за большую скорость тележки
-        reward -= abs(cart_x) * 0.01  # штраф за уход тележки от центра
-        reward -= abs(theta_dot) * 0.02  # штраф за колебания маятника
+        reward -= abs(cart_x) * 0.03  # штраф за уход тележки от центра
+        reward -= abs(theta_dot) * 0.005  # штраф за колебания маятника
 
         # Условия завершения эпизода
         done = abs(theta) > math.pi / 4 or out_of_bounds

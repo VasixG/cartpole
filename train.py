@@ -25,18 +25,7 @@ def main():
         make_env(cart_mass=1.1, pendulum_len=0.6, pendulum_mass=0.1, render=False), n_envs=n_envs
     )
 
-    model_path = "models/ppo_cartpole_bullet2.zip"
-
-    if os.path.exists(model_path):
-        print(f"Loading model from {model_path}...")
-        model = PPO.load(model_path, env=vec_env)
-    else:
-        print("No pre-trained model found. Creating a new model...")
-        model = make_ppo_model(vec_env)
-
-    # model = make_ppo_model(vec_env)
-
-    model_path = "models/ppo_cartpole_bullet2.zip"
+    model_path = "models/ppo_cartpole_bullet2_2048.zip"
 
     if not os.path.exists("models"):
         os.makedirs("models")
