@@ -22,7 +22,7 @@ def main():
     n_envs = 2
 
     vec_env = make_vec_env(
-        make_env(cart_mass=1.1, pendulum_len=0.6, pendulum_mass=0.1, render=True), n_envs=n_envs
+        make_env(cart_mass=1.1, pendulum_len=0.6, pendulum_mass=0.1, render=False), n_envs=n_envs
     )
 
     model_path = "models/ppo_cartpole_bullet2.zip"
