@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from datetime import datetime
-import torch.optim as optim
+import time
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -116,7 +116,7 @@ class ReluPositiveNetwork(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return 100 * self.model(x)
+        return 20 * self.model(x)
 
 
 class ReluNetwork(nn.Module):
@@ -125,12 +125,12 @@ class ReluNetwork(nn.Module):
         layers = []
         for i in range(len(dims) - 2):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
-            layers.append(nn.Tanh())
+            layers.append(nn.ReLU())
         layers.append(nn.Linear(dims[-2], dims[-1]))
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.model(x)
+        return 100 * self.model(x)
 
 
 def rk4_step(f, x, u, dt=0.01):
@@ -286,13 +286,15 @@ def render_trained_policy(vec_env, policy, num_steps=1000):
             break  # Episode ended
 
 
-def render_trained_policy(vec_env, policy, num_steps=1000):
+def render_trained_policy(vec_env, policy, num_steps=1000, sleep_time=0.01):
     """
-    Render the cartpole system using the trained policy.
+    Render the cartpole system using the trained policy with a delay between steps.
+
     Args:
         vec_env: Vectorized cartpole environment with rendering enabled
         policy: Trained policy (PyTorch model)
-        num_steps: Number of steps to render
+        num_steps: Number of steps to render (default: 1000)
+        sleep_time: Time to sleep between steps in seconds (default: 0.01)
     """
     obs = vec_env.reset()
     for step in range(num_steps):
@@ -300,248 +302,34 @@ def render_trained_policy(vec_env, policy, num_steps=1000):
         with torch.no_grad():
             obs_t = torch.from_numpy(obs).float().to(device)
             action = policy(obs_t).cpu().numpy()
+            print(action)
         # Step the environment and render
         obs, _, dones, _, _ = vec_env.step(action)
         vec_env.render()  # Display the current frame
+        time.sleep(sleep_time)  # Pause to make rendering observable
         if np.any(dones):
             break  # Episode ended
 
 
-def plot_over_regionA(regionA, W, Q, policy, device, num_points=50):
-    """
-    Plot 3D surfaces of policy, W, and Q over regionA using the first two coordinates (x, x_dot).
+def main():
 
-    Args:
-        regionA: EllipsoidRegion instance
-        W: GeometryAwareW model
-        Q: ReluPositiveNetwork model
-        policy: ReluNetwork model
-        device: torch.device
-        num_points: Number of points along each axis for the grid
-    """
-    # Define grid over x and x_dot (first two coordinates of regionA)
-    x_min, x_max = -regionA.axes[0], regionA.axes[0]  # x range: [-0.5, 0.5]
-    xdot_min, xdot_max = -regionA.axes[1], regionA.axes[1]  # x_dot range: [-1.0, 1.0]
-    x = np.linspace(x_min, x_max, num_points)
-    x_dot = np.linspace(xdot_min, xdot_max, num_points)
-    X, X_dot = np.meshgrid(x, x_dot)
-
-    # Create input tensor with fixed theta=0, theta_dot=0
-    inputs = np.stack(
-        [X.flatten(), X_dot.flatten(), np.zeros_like(X.flatten()), np.zeros_like(X.flatten())],
-        axis=1,
-    )
-    inputs_t = torch.from_numpy(inputs).float().to(device)
-
-    # Evaluate models
-    with torch.no_grad():
-        W_out = W(inputs_t).cpu().numpy().reshape(num_points, num_points)
-        Q_out = Q(inputs_t).cpu().numpy().reshape(num_points, num_points)
-        policy_out = policy(inputs_t).cpu().numpy().reshape(num_points, num_points)
-
-    # Create 3D plots
-    fig = plt.figure(figsize=(18, 6))
-
-    # Plot W
-    ax1 = fig.add_subplot(131, projection="3d")
-    ax1.plot_surface(X, X_dot, W_out, cmap="viridis")
-    ax1.set_title("W over RegionA")
-    ax1.set_xlabel("x")
-    ax1.set_ylabel("x_dot")
-    ax1.set_zlabel("W(x, x_dot, 0, 0)")
-
-    # Plot Q
-    ax2 = fig.add_subplot(132, projection="3d")
-    ax2.plot_surface(X, X_dot, Q_out, cmap="viridis")
-    ax2.set_title("Q over RegionA")
-    ax2.set_xlabel("x")
-    ax2.set_ylabel("x_dot")
-    ax2.set_zlabel("Q(x, x_dot, 0, 0)")
-
-    # Plot policy
-    ax3 = fig.add_subplot(133, projection="3d")
-    ax3.plot_surface(X, X_dot, policy_out, cmap="viridis")
-    ax3.set_title("Policy over RegionA")
-    ax3.set_xlabel("x")
-    ax3.set_ylabel("x_dot")
-    ax3.set_zlabel("Policy(x, x_dot, 0, 0)")
-
-    plt.tight_layout()
-    plt.show()
-
-
-class StochasticPolicy(nn.Module):
-    """
-    Example of a policy that outputs a Gaussian distribution over 1D actions.
-    You can generalize to multi-dimensional actions or use other param. distributions.
-    """
-
-    def __init__(self, in_dim=4, hidden=64):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU()
-        )
-        # Head for mean, head for log_std
-        self.mean_head = nn.Linear(hidden, 1)
-        self.log_std_head = nn.Linear(hidden, 1)
-
-    def forward(self, x):
-        """Returns mean, log_std for the distribution over actions."""
-        h = self.net(x)
-        mean = self.mean_head(h)
-        log_std = self.log_std_head(h).clamp(-1.0, 1.0)  # keep log_std within some range
-        return mean, log_std
-
-    def get_action_and_logprob(self, obs):
-        """
-        Samples an action from the policy, returns (action, logprob).
-        obs: [batch_size, state_dim]
-        """
-        mean, log_std = self.forward(obs)
-        std = torch.exp(log_std)
-        # Sample from Normal(mean, std)
-        eps = torch.randn_like(mean)
-        action = mean + std * eps
-        # Compute log prob of that sample
-        # log prob of normal ~ -0.5 * [((a - mean)/std)**2 + 2*log_std + log(2*pi)]
-        log_prob = -0.5 * (((action - mean) / (std + 1e-8)) ** 2 + 2 * log_std + np.log(2 * np.pi))
-        return action, log_prob.sum(dim=1, keepdim=True)  # sum across action dims if multi-d
-
-
-def rollout_trajectory(env, policy, W, Q, regionA, num_steps=200, dt=0.01):
-    """
-    Roll out a single trajectory from an initial state in regionA.
-    Returns dict with all the goodies we need to compute the gradient:
-      {
-        'states':      [T+1, state_dim],
-        'actions':     [T,   1],
-        'log_probs':   [T,   1],
-        'rewards':     [T,   1],  # each r_t depends on (s_t, s_{t+1}) and networks
-      }
-    """
-    # 1) Sample a single initial state from regionA
-    init_state_np = regionA.sample_inside(1)[0]
-    env.set_initial_state(init_state_np)
-    obs = env.reset()
-
-    obs_list = []
-    act_list = []
-    logp_list = []
-    rew_list = []
-
-    obs_tensor = torch.tensor(obs, dtype=torch.float, device=device).unsqueeze(0)
-
-    for t in range(num_steps):
-        obs_list.append(obs_tensor)
-
-        # 2) Sample action from current policy
-        with torch.no_grad():
-            action_tensor, logp_tensor = policy.get_action_and_logprob(obs_tensor)
-        action_np = action_tensor.cpu().numpy().flatten()
-
-        # 3) Step environment (no gradient needed, so no torch ops)
-        next_obs, _, done, truncated, _ = env.step(action_np[0])
-        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float, device=device).unsqueeze(0)
-
-        act_list.append(action_tensor)
-        logp_list.append(logp_tensor)
-
-        # 4) Compute immediate reward r_t = - [ (W(s_{t+1}) - W(s_t))/dt + Q(s_t)*(1 - W(s_t)) ]
-        #    We'll do that in a differentiable manner, but can't backprop through env.
-        #    So we treat s_t, s_{t+1} as just data.
-        W_st = W(obs_tensor)  # shape [1,1]
-        W_st1 = W(next_obs_tensor)  # shape [1,1]
-        dWdt = (W_st1 - W_st) / dt
-        rew_t = -(dWdt + Q(obs_tensor) * (1.0 - W_st))  # shape [1,1]
-
-        # detach the state transitions if you want purely the param gradient (common in RL).
-        # But typically W(...) itself is a function of NN, so we keep that gradient.
-
-        rew_list.append(rew_t)
-
-        obs_tensor = next_obs_tensor
-        if done or truncated:
-            # End the trajectory if environment says so
-            break
-
-    # Last observation
-    obs_list.append(obs_tensor)
-
-    # Convert to big Tensors
-    states = torch.cat(obs_list, dim=0)  # shape [T+1, state_dim]
-    actions = torch.cat(act_list, dim=0)  # shape [T,   action_dim]
-    logps = torch.cat(logp_list, dim=0)  # shape [T,   1]
-    rewards = torch.cat(rew_list, dim=0)  # shape [T,   1]
-
-    return {
-        "states": states,  # [T+1, d]
-        "actions": actions,  # [T,   1]
-        "logps": logps,  # [T,   1]
-        "rewards": rewards,  # [T,   1]
-    }
-
-
-def train_handwritten_policy():
-    # Hyperparameters
-    lr = 1e-3
-    epochs = 200
-    num_trajectories = 200
-    T = 50  # steps per trajectory
-
-    # Create environment
-    env = CartPoleBulletEnv(cart_mass=1.0, pendulum_len=0.6, pendulum_mass=0.1, render=False)
-    regionA = EllipsoidRegion(axes=[0.5, 1.0, 0.1, 0.5])
-
-    # Instantiate networks
-    W = GeometryAwareW(dims=[4, 64, 64, 32, 1], regionA=regionA).to(device)
-    Q = ReluPositiveNetwork(dims=[4, 64, 64, 32, 1]).to(device)
-    policy = StochasticPolicy(in_dim=4, hidden=64).to(device)
-
-    # One optimizer for everything
-    optimizer = optim.Adam(
-        list(W.parameters()) + list(Q.parameters()) + list(policy.parameters()), lr=lr
+    vec_env = CartPoleBulletEnv(
+        cart_mass=1.0,
+        pendulum_len=0.6,
+        pendulum_mass=0.1,
+        render="human",
     )
 
-    for e in range(epochs):
-        # Collect multiple trajectories per epoch
-        trajs = []
-        for _ in range(num_trajectories):
-            traj = rollout_trajectory(env, policy, W, Q, regionA, num_steps=T, dt=0.01)
-            trajs.append(traj)
+    policy_path = r"C:\Users\vasil\study\vkr\cartpole\models\20250320_233857_950_80.00\policy.pth"
 
-        # Construct the total loss as:
-        #   L = - Σ_over_τ [ R(θ, τ) * Σ_t log π(a_t | s_t) + R(θ, τ) ]
-        # with R(θ, τ) = sum of the stepwise rewards (or any other aggregator).
-        # We'll do everything in one big graph pass, so we must re-compute the
-        # networks' forward passes that DO require grads. But the env step transitions
-        # remain “just data”.
+    policy = ReluNetwork(dims=[4, 64, 64, 32, 1]).to(device)
 
-        # Clear grads
-        optimizer.zero_grad()
+    policy.load_state_dict(torch.load(policy_path, map_location=device))
 
-        total_loss = torch.tensor(0.0, device=device)
-        for traj in trajs:
-            # Sum of the stepwise rewards, which is a function of W,Q => keep them in graph
-            R_tau = traj["rewards"].sum()  # shape [1]
+    policy.eval().to(device)
 
-            # Sum of the log-probs of the actions
-            logp_sum = traj["logps"].sum()  # shape [1]
-
-            # L_τ = - [ R(θ, τ) * logp_sum + R(θ, τ) ]
-            #     = - R(θ,τ)*logp_sum - R(θ,τ)
-            loss_traj = -R_tau * logp_sum - R_tau
-            total_loss = total_loss + loss_traj
-
-        # Backprop and step
-        total_loss.backward()
-        optimizer.step()
-
-        # Logging
-        avg_return = torch.stack([t["rewards"].sum() for t in trajs]).mean().item()
-        print(f"Epoch {e}: avg return = {avg_return:.4f}   loss = {total_loss.item():.4f}")
-
-    env.close()
+    render_trained_policy(vec_env, policy)
 
 
 if __name__ == "__main__":
-    train_handwritten_policy()
+    main()
