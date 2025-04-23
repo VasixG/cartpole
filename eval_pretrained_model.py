@@ -7,6 +7,8 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+from stable_baselines3 import PPO
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -166,13 +168,62 @@ def make_state(obs):
     return torch.tensor([[x, x_dot, theta, theta_dot]], dtype=torch.float32, device=device)
 
 
-for ep in range(5):
+# for ep in range(5):
+#     obs = env.reset()
+#     done = truncated = False
+#     while not (done or truncated):
+#         state = obs
+#         with torch.no_grad():
+#             F = policy(torch.Tensor(state).to(device)).item()  # сила (Н)
+#         action = np.array([30 * F], dtype=np.float32)
+#         obs, _, done, truncated, _ = env.step(action)
+# env.close()
+
+theta_thresh = 0.418
+dt = 1.0 / 100.0
+episode_times = []
+
+model_path = r"models_pretrained\best_ppo_model.zip"
+dqn_model = PPO.load(model_path)
+
+for ep in range(10):
     obs = env.reset()
     done = truncated = False
+    time_in_air = 0.0
+
     while not (done or truncated):
         state = obs
         with torch.no_grad():
-            F = policy(torch.Tensor(state).to(device)).item()  # сила (Н)
+            F = dqn_model.predict(state, deterministic=True)[0].item()
         action = np.array([30 * F], dtype=np.float32)
         obs, _, done, truncated, _ = env.step(action)
-env.close()
+
+        theta = obs[2]
+        if abs(theta) < theta_thresh:
+            time_in_air += dt
+
+    episode_times.append(time_in_air)
+
+avg_time_in_air = sum(episode_times) / len(episode_times)
+print(f"Среднее время в воздухе PPO: {avg_time_in_air:.4f} сек")
+
+for ep in range(10):
+    obs = env.reset()
+    done = truncated = False
+    time_in_air = 0.0
+
+    while not (done or truncated):
+        state = obs
+        with torch.no_grad():
+            F = policy(torch.Tensor(state).to(device)).item()
+        action = np.array([30 * F], dtype=np.float32)
+        obs, _, done, truncated, _ = env.step(action)
+
+        theta = obs[2]
+        if abs(theta) < theta_thresh:
+            time_in_air += dt
+
+    episode_times.append(time_in_air)
+
+avg_time_in_air = sum(episode_times) / len(episode_times)
+print(f"Среднее время в воздухе zubovroa: {avg_time_in_air:.4f} сек")
